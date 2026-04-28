@@ -12,17 +12,13 @@ const cacheDisponibilidad                  = require('./cacheDisponibilidad.serv
  */
 async function agendarCita({ fecha, horaInicio, medicoId, pacienteId, sedeId, canal, ip }) {
   const horaFin = calcularHoraFin(horaInicio, 20);
-  const conn    = await pool.getConnection();
 
-  try {
-    await conn.beginTransaction();
-
+  const { citaId } = await pool.withTransaction(async (conn) => {
     // Lock del turno para evitar race condition
     const [ocupado] = await conn.execute(CITAS.VERIFICAR_DISPONIBILIDAD_LOCK, [
       medicoId, fecha, horaInicio,
     ]);
     if (ocupado.length > 0) {
-      await conn.rollback();
       const err = new Error('El turno ya no está disponible'); err.status = 409; throw err;
     }
 
@@ -30,28 +26,22 @@ async function agendarCita({ fecha, horaInicio, medicoId, pacienteId, sedeId, ca
       fecha, horaInicio, horaFin, canal, pacienteId, medicoId, sedeId,
     ]);
 
-    await conn.commit();
-
-    // Invalidar caché de disponibilidad para este médico y fecha
-    await cacheDisponibilidad.invalidar(medicoId, fecha);
-
-    await registrarAuditoria({
-      usuarioId: pacienteId,
-      accion:    'agendar_cita',
-      entidad:   'citas',
-      entidadId: result.insertId,
-      detalle:   `Cita agendada para ${fecha} ${horaInicio}`,
-      canal,
-      ip,
-    });
-
     return { citaId: result.insertId };
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
-  }
+  });
+
+  // Invalidar caché y auditoría fuera de la transacción (no son críticos para el rollback)
+  cacheDisponibilidad.invalidar(medicoId, fecha);
+  await registrarAuditoria({
+    usuarioId: pacienteId,
+    accion:    'agendar_cita',
+    entidad:   'citas',
+    entidadId: citaId,
+    detalle:   `Cita agendada para ${fecha} ${horaInicio}`,
+    canal,
+    ip,
+  });
+
+  return { citaId };
 }
 
 /**
@@ -88,49 +78,40 @@ async function cancelarCita({ citaId, usuarioId, ip, canal = 'plataforma_web' })
  */
 async function reasignarCita({ citaId, nuevoMedicoId, nuevaFecha, nuevaHoraInicio, usuarioId, ip, canal }) {
   const horaFin = calcularHoraFin(nuevaHoraInicio, 20);
-  const conn    = await pool.getConnection();
 
-  try {
-    await conn.beginTransaction();
-
+  const { citaOriginal } = await pool.withTransaction(async (conn) => {
     const [ocupado] = await conn.execute(CITAS.VERIFICAR_DISPONIBILIDAD_LOCK, [
       nuevoMedicoId, nuevaFecha, nuevaHoraInicio,
     ]);
     if (ocupado.length > 0) {
-      await conn.rollback();
       const err = new Error('El turno destino ya no está disponible'); err.status = 409; throw err;
     }
 
     // Obtener cita original para invalidar caché viejo
     const [rows] = await conn.execute(CITAS.BUSCAR_POR_ID, [citaId]);
-    const citaOriginal = rows[0];
 
     await conn.execute(CITAS.REASIGNAR, [
       nuevoMedicoId, nuevaFecha, nuevaHoraInicio, horaFin, citaId,
     ]);
 
-    await conn.commit();
+    return { citaOriginal: rows[0] };
+  });
 
-    if (citaOriginal) {
-      await cacheDisponibilidad.invalidar(citaOriginal.medico_id, citaOriginal.fecha);
-    }
-    await cacheDisponibilidad.invalidar(nuevoMedicoId, nuevaFecha);
-
-    await registrarAuditoria({
-      usuarioId,
-      accion:    'reasignar_cita',
-      entidad:   'citas',
-      entidadId: citaId,
-      detalle:   `Reasignada a médico ${nuevoMedicoId} el ${nuevaFecha} ${nuevaHoraInicio}`,
-      canal,
-      ip,
-    });
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
+  // Invalidar caché y auditoría fuera de la transacción
+  if (citaOriginal) {
+    cacheDisponibilidad.invalidar(citaOriginal.medico_id, citaOriginal.fecha);
   }
+  cacheDisponibilidad.invalidar(nuevoMedicoId, nuevaFecha);
+
+  await registrarAuditoria({
+    usuarioId,
+    accion:    'reasignar_cita',
+    entidad:   'citas',
+    entidadId: citaId,
+    detalle:   `Reasignada a médico ${nuevoMedicoId} el ${nuevaFecha} ${nuevaHoraInicio}`,
+    canal,
+    ip,
+  });
 }
 
 /**

@@ -2,7 +2,7 @@
 
 const authService = require('../services/auth.service');
 
-async function login(req, res) {
+async function login(req, res, next) {
   try {
     const { usuarioId, contrasena } = req.body;
     const ip     = req.ip;
@@ -10,37 +10,41 @@ async function login(req, res) {
     const result = await authService.login({ usuarioId, contrasena, ip, canal });
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function cambiarContrasena(req, res) {
+async function cambiarContrasena(req, res, next) {
   try {
     const { nuevaContrasena } = req.body;
     const usuarioId = req.usuario.id;
     await authService.cambiarContrasena({ usuarioId, nuevaContrasena, ip: req.ip });
     res.json({ mensaje: 'Contraseña actualizada' });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function obtenerContrasena(req, res) {
+async function obtenerContrasena(req, res, next) {
   try {
     const contrasena = await authService.obtenerContrasenaActual(req.params.id);
     res.json({ contrasena });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function recuperarContrasena(req, res) {
+async function recuperarContrasena(req, res, next) {
   try {
     const { email, canal } = req.body;
     await authService.iniciarRecuperacion({ email, canal });
     res.json({ mensaje: 'Si el correo existe, recibirá instrucciones' });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 

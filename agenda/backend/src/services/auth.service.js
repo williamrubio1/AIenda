@@ -22,10 +22,10 @@ async function login({ usuarioId, contrasena, ip, canal = 'plataforma_web' }) {
   const usuario = rows[0];
 
   if (!usuario || usuario.contrasena !== contrasena) {
-    // Incrementar contador de intentos fallidos
-    const intentos = await incrementarIntentos(usuarioId);
+    // Incrementar contador de intentos fallidos (funciones síncronas en memoria)
+    const intentos = incrementarIntentos(usuarioId);
     if (intentos >= MAX_INTENTOS) {
-      await bloquearUsuario(usuarioId);
+      bloquearUsuario(usuarioId);
     }
     const error = new Error('Credenciales incorrectas');
     error.status = 401;
@@ -33,7 +33,7 @@ async function login({ usuarioId, contrasena, ip, canal = 'plataforma_web' }) {
   }
 
   // Login exitoso: limpiar contadores
-  await resetearIntentos(usuarioId);
+  resetearIntentos(usuarioId);
 
   await registrarAuditoria({
     usuarioId: usuario.id,

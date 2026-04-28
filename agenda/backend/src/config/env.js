@@ -16,12 +16,11 @@ required.forEach((key) => {
 });
 
 module.exports = {
-  // Servidor
-  PORT: parseInt(process.env.PORT, 10) || 3001,
+  // Servidor — PORT lo usa server.js directamente desde process.env.PORT
   NODE_ENV: process.env.NODE_ENV || 'development',
 
   // JWT
-  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_SECRET:    process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '8h',
 
   // Base de datos
@@ -41,4 +40,13 @@ module.exports = {
     password: process.env.MAIL_PASSWORD,
     from:     process.env.MAIL_FROM,
   },
+
+  // Redis — completamente opcional, null si no está configurado
+  REDIS: process.env.REDIS_HOST
+    ? {
+        host:     process.env.REDIS_HOST,
+        port:     parseInt(process.env.REDIS_PORT, 10) || 6379,
+        password: process.env.REDIS_PASSWORD || undefined,
+      }
+    : null,
 };

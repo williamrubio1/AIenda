@@ -1,0 +1,204 @@
+================================================================================
+  GUÍA DE DESPLIEGUE EN HOSTINGER — AIenda (Node.js + React + MySQL)
+================================================================================
+
+REQUISITOS PREVIOS EN HOSTINGER
+────────────────────────────────
+- Plan de hosting con soporte Node.js habilitado (Business o superior)
+- Base de datos MySQL creada desde hPanel > Bases de Datos
+- Acceso FTP (credenciales en hPanel > Archivos > Administrador FTP)
+- Subdominio o dominio apuntando al proyecto
+
+================================================================================
+PASO 1 — PREPARAR EL FRONTEND (React + Vite)
+================================================================================
+
+En tu máquina local, dentro de la carpeta "frontend/":
+
+  npm install
+  npm run build
+
+Esto genera la carpeta "frontend/dist/" con los archivos estáticos compilados.
+
+Renombra (o copia) esa carpeta a "public_html/" dentro de la carpeta raíz
+del backend:
+
+  agenda/
+    backend/
+      public_html/     <-- aquí van los archivos del build de Vite
+        index.html
+        assets/
+      src/
+      package.json
+      ...
+
+================================================================================
+PASO 2 — PREPARAR EL BACKEND
+================================================================================
+
+2.1 Crear el archivo ".env" a partir de ".env.example":
+    Copia .env.example y renómbralo a .env. Completa todos los valores reales.
+    
+    IMPORTANTE: El campo PORT lo asigna Hostinger automáticamente.
+    No lo cambies a mano en producción.
+
+2.2 Instalar solo dependencias de producción (sin devDependencies):
+    (esto lo harás en el servidor o puedes subir node_modules ya compilado)
+
+    npm install --omit=dev
+
+================================================================================
+PASO 3 — SUBIR ARCHIVOS POR FTP
+================================================================================
+
+Conecta con tu cliente FTP (FileZilla, WinSCP, etc.) usando las credenciales
+de hPanel > Archivos > Administrador FTP.
+
+Estructura que debes subir al servidor (directorio raíz del proyecto Node):
+
+  /                           ← raíz del proyecto en Hostinger
+  ├── src/
+  │   ├── app.js
+  │   ├── server.js
+  │   ├── config/
+  │   ├── controllers/
+  │   ├── db/
+  │   ├── middlewares/
+  │   ├── routes/
+  │   ├── services/
+  │   └── utils/
+  ├── public_html/            ← build del frontend (React)
+  │   ├── index.html
+  │   └── assets/
+  ├── node_modules/           ← subir SOLO si no puedes correr npm install remoto
+  ├── package.json
+  └── .env                    ← NUNCA dentro de public_html
+
+NO subas:
+  - .env.example (es solo referencia local)
+  - frontend/ completo (solo el build compilado en public_html/)
+  - node_modules de desarrollo (nodemon, etc.)
+
+================================================================================
+PASO 4 — CONFIGURAR NODE.JS EN HOSTINGER
+================================================================================
+
+4.1 Ir a hPanel > Sitios Web > [tu dominio] > Node.js
+
+4.2 Configurar:
+    - Node.js version: 18.x o superior (LTS recomendado)
+    - Application mode: Production
+    - Application root: /  (raíz donde subiste los archivos)
+    - Application startup file: src/server.js
+
+4.3 Hacer clic en "Create" o "Save".
+
+4.4 Hostinger inyectará la variable PORT automáticamente.
+    El servidor escuchará en ese puerto.
+
+================================================================================
+PASO 5 — VARIABLES DE ENTORNO EN HOSTINGER
+================================================================================
+
+En hPanel > Sitios Web > [tu dominio] > Node.js > Environment Variables,
+agrega cada variable del archivo .env:
+
+  NODE_ENV        = production
+  JWT_SECRET      = [tu secreto real]
+  JWT_EXPIRES_IN  = 8h
+  DB_HOST         = localhost
+  DB_PORT         = 3306
+  DB_USER         = [usuario MySQL]
+  DB_PASSWORD     = [contraseña MySQL]
+  DB_NAME         = [nombre de la BD]
+  MAIL_HOST       = smtp.hostinger.com
+  MAIL_PORT       = 587
+  MAIL_USER       = [correo]
+  MAIL_PASSWORD   = [contraseña correo]
+  MAIL_FROM       = AIenda <noreply@tudominio.com>
+
+NO agregues PORT (Hostinger lo gestiona).
+NO agregues REDIS_* si no usas Redis.
+
+================================================================================
+PASO 6 — IMPORTAR LA BASE DE DATOS
+================================================================================
+
+6.1 En hPanel > Bases de Datos > phpMyAdmin, abre la base de datos creada.
+
+6.2 Importa el archivo: backend/src/db/schema.sql
+
+6.3 Verifica que las tablas se crearon correctamente.
+
+================================================================================
+PASO 7 — REINICIAR Y VERIFICAR
+================================================================================
+
+7.1 En hPanel > Node.js, haz clic en "Restart".
+
+7.2 Verifica que el servidor arrancó correctamente revisando los logs
+    (hPanel > Node.js > Logs o Error Log).
+
+7.3 Prueba el health check desde el navegador:
+    https://tudominio.com/api/health
+    Respuesta esperada: { "status": "ok", "env": "production" }
+
+7.4 Abre la URL principal y verifica que carga el frontend React.
+
+================================================================================
+SOLUCIÓN DE PROBLEMAS COMUNES
+================================================================================
+
+ERROR: "process.env.PORT no está definido"
+  → El servidor Node.js no está configurado correctamente en hPanel.
+    Verifica que Application startup file = src/server.js
+
+ERROR: "[MySQL] Error de conexión"
+  → Revisa las variables DB_HOST, DB_USER, DB_PASSWORD, DB_NAME en hPanel.
+  → En Hostinger el host suele ser "localhost" para la misma cuenta.
+
+ERROR: Frontend carga pero las rutas directas dan 404
+  → El fallback SPA ya está configurado en app.js. Si persiste, verifica
+    que el frontend esté en public_html/ y que index.html exista ahí.
+
+ERROR: "Cannot find module 'ioredis'"
+  → Es esperado y no crítico. Redis es opcional y la app lo ignora.
+
+ERROR 413: "Request too large"
+  → express.json({ limit: '1mb' }) está configurado. Si envías archivos
+    grandes, ajusta ese límite.
+
+================================================================================
+ESTRUCTURA FINAL DEL PROYECTO EN PRODUCCIÓN
+================================================================================
+
+agenda/
+├── backend/
+│   ├── .env                    ← variables reales (NO subir a Git)
+│   ├── .env.example            ← plantilla (sí en Git)
+│   ├── package.json
+│   ├── public_html/            ← build compilado del frontend
+│   │   ├── index.html
+│   │   └── assets/
+│   ├── node_modules/
+│   └── src/
+│       ├── app.js
+│       ├── server.js           ← startup file para Hostinger
+│       ├── config/
+│       │   ├── env.js
+│       │   └── redis.js
+│       ├── controllers/
+│       ├── db/
+│       │   ├── pool.js
+│       │   ├── schema.sql
+│       │   └── queries/
+│       ├── middlewares/
+│       ├── routes/
+│       │   └── validators/
+│       ├── services/
+│       └── utils/
+└── frontend/                   ← código fuente React (solo desarrollo local)
+    ├── src/
+    └── package.json
+
+================================================================================

@@ -1,8 +1,11 @@
 // src/controllers/citas.controller.js
+// Los errores con .status definido son errores de negocio (4xx).
+// Los errores sin .status son inesperados (5xx) y se propagan al handler global de app.js,
+// que se encarga de ocultarlos en producción.
 
 const citasService = require('../services/citas.service');
 
-async function agendar(req, res) {
+async function agendar(req, res, next) {
   try {
     const { fecha, horaInicio, medicoId, sedeId } = req.body;
     const pacienteId = req.usuario.id;
@@ -12,11 +15,12 @@ async function agendar(req, res) {
     });
     res.status(201).json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function cancelar(req, res) {
+async function cancelar(req, res, next) {
   try {
     await citasService.cancelarCita({
       citaId:    req.params.id,
@@ -26,11 +30,12 @@ async function cancelar(req, res) {
     });
     res.json({ mensaje: 'Cita cancelada' });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function reasignar(req, res) {
+async function reasignar(req, res, next) {
   try {
     const { nuevoMedicoId, nuevaFecha, nuevaHoraInicio } = req.body;
     await citasService.reasignarCita({
@@ -44,36 +49,37 @@ async function reasignar(req, res) {
     });
     res.json({ mensaje: 'Cita reasignada' });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
   }
 }
 
-async function misCitas(req, res) {
+async function misCitas(req, res, next) {
   try {
     const citas = await citasService.citasPorPaciente(req.usuario.id);
     res.json(citas);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-async function citasDiarias(req, res) {
+async function citasDiarias(req, res, next) {
   try {
     const { fecha } = req.query;
     const citas     = await citasService.citasDiariasmedico(req.usuario.id, fecha);
     res.json(citas);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 
-async function citasRango(req, res) {
+async function citasRango(req, res, next) {
   try {
     const { fechaInicio, fechaFin } = req.query;
     const citas = await citasService.citasRangoMedico(req.usuario.id, fechaInicio, fechaFin);
     res.json(citas);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 }
 

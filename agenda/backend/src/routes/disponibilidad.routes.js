@@ -11,8 +11,8 @@ const { query } = require('express-validator');
 router.get('/',
   auth,
   [
-    query('medicoId').isInt({ min: 1 }),
-    query('fecha').isDate(),
+    query('medicoId').isInt({ min: 1 }).withMessage('medicoId debe ser un entero positivo'),
+    query('fecha').isDate().withMessage('fecha inválida (YYYY-MM-DD)'),
   ],
   validate,
   ctrl.turnosLibres,

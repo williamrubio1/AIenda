@@ -19,12 +19,13 @@ async function enviarCorreo({ to, subject, text, html }) {
 }
 
 // ── Recuperación de contraseña ─────────────────────────────────────────────
+// SEGURIDAD: NUNCA enviar la contraseña actual. Solo se informa que el admin
+// la restablecerá manualmente. Pendiente implementar token de un solo uso.
 async function enviarRecuperacionEmail(usuario) {
-  // TODO: generar token con expiración y enlace real
   await enviarCorreo({
     to:      usuario.email,
-    subject: 'Recuperación de contraseña - Agenda',
-    text:    `Hola ${usuario.nombre}, su contraseña actual es: ${usuario.contrasena}`,
+    subject: 'Recuperación de contraseña - AIenda',
+    text:    `Hola ${usuario.nombre}, hemos recibido una solicitud de recuperación de contraseña.\n\nUn administrador se pondrá en contacto contigo para restablecer tu acceso.\n\nSi no solicitaste esto, ignora este mensaje.`,
   });
 }
 
